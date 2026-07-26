@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring Batch : Cours &amp; TP</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --green: #22c55e;
+            --red: #ef4444;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+        header {
+            padding: 2rem 1.5rem 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        header h1 { margin: 0; font-size: 1.5rem; }
+        header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; }
+        .tools a {
+            display: inline-block;
+            padding: 0.5rem 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .tools a:hover { background: var(--card); border-color: var(--accent); }
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+            align-items: start;
+        }
+        .col-left { display: grid; gap: 1.25rem; }
+        .col-right { position: sticky; top: 1rem; }
+        @media (max-width: 800px) {
+            .layout { grid-template-columns: 1fr; }
+            .col-right { position: static; }
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+        }
+        .card h2 { margin: 0 0 0.25rem; font-size: 1.1rem; }
+        .card .desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+        button {
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            border-radius: 8px;
+            padding: 0.55rem 1.1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        button:hover { background: var(--accent-hover); }
+        form { display: inline; margin: 0; }
+        .flash {
+            background: rgba(34,197,94,0.12);
+            border: 1px solid rgba(34,197,94,0.4);
+            color: var(--green);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            font-size: 0.88rem;
+            margin-bottom: 1.25rem;
+            /* Rend les \n du message (composes cote controleur) comme des retours a la ligne */
+            white-space: pre-line;
+        }
+        /* Variante erreur : meme bloc, en rouge */
+        .flash.error {
+            background: rgba(239,68,68,0.12);
+            border-color: rgba(239,68,68,0.4);
+            color: var(--red);
+        }
+        /* Panneau "Dernieres executions" */
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 0 0 1rem;
+        }
+        .panel-head h2 { margin: 0; font-size: 1.1rem; }
+        .refresh {
+            font-size: 0.8rem;
+            color: var(--accent);
+            text-decoration: none;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.35rem 0.7rem;
+        }
+        .refresh:hover { border-color: var(--accent); }
+        .exec {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.7rem 0.9rem;
+            margin-bottom: 0.7rem;
+            background: #0b1220;
+        }
+        .exec-top {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+        }
+        .exec-top .job { font-weight: 600; }
+        .exec-top .id { color: var(--muted); font-size: 0.8rem; }
+        .exec-meta { color: var(--muted); font-size: 0.78rem; margin-top: 0.3rem; }
+        .exec-params {
+            margin-top: 0.35rem;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 0.75rem;
+            color: #cbd5e1;
+            word-break: break-all;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.1rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+        .badge.ok { background: rgba(34,197,94,0.15); color: var(--green); }
+        .badge.ko { background: rgba(239,68,68,0.15); color: var(--red); }
+        .badge.run { background: rgba(56,189,248,0.15); color: var(--accent); }
+        .steps {
+            margin-top: 0.5rem;
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.74rem;
+        }
+        .steps th, .steps td {
+            text-align: left;
+            padding: 0.2rem 0.4rem;
+            border-top: 1px solid var(--border);
+        }
+        .steps th { color: var(--muted); font-weight: 600; }
+        .exit-msg {
+            margin-top: 0.5rem;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 0.72rem;
+            color: #fca5a5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .empty { color: var(--muted); font-style: italic; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+<header>
+    <div>
+        <h1>Spring Batch : Cours &amp; TP</h1>
+        <p>Déclencheur visuel des jobs. Chaque TP est une carte ci-dessous.</p>
+    </div>
+    <div class="tools">
+        <a href="/h2-console" target="_blank" rel="noopener">🗄️ Console H2</a>
+    </div>
+</header>
+
+<main>
+    <!-- Message de retour apres lancement d'un job -->
+    <div class="flash" th:if="${message}" th:text="${message}"></div>
+    <!-- Message d'erreur (rouge) -->
+    <div class="flash error" th:if="${errorMessage}" th:text="${errorMessage}"></div>
+
+    <div class="layout">
+        <!-- Colonne gauche : les TP -->
+        <div class="col-left">
+            <!-- TP 1 : HelloWorld Tasklet -->
+            <section class="card">
+                <h2>TP 1 : HelloWorld (Tasklet)</h2>
+                <p class="desc">Un job d'une seule étape Tasklet qui affiche « Bonjour depuis un Tasklet ! » dans la console.</p>
+                <form th:action="@{/jobs/hello}" method="post">
+                    <button type="submit">▶ Lancer le HelloJob</button>
+                </form>
+                <form th:action="@{/jobs/second}" method="post" style="margin-left:.5rem">
+                    <button type="submit">▶ Lancer le 2nd Job</button>
+                </form>
+            </section>
+
+            <!-- TP 2 : passage d'un parametre saisi -->
+            <section class="card">
+                <h2>TP 2 : Job avec paramètre</h2>
+                <p class="desc">Le texte saisi est envoyé comme paramètre du job (visible dans BATCH_JOB_EXECUTION_PARAMS).</p>
+                <form th:action="@{/jobs/tp2}" method="post">
+                    <button type="submit">▶ Lancer le TP2</button>
+                    <input type="text" name="message" placeholder="message…" value="Coucou"
+                           style="margin-left:.5rem;padding:.5rem .7rem;border-radius:8px;
+                                      border:1px solid var(--border);background:#0b1220;color:var(--text)">
+                </form>
+            </section>
+
+            <!-- TP 3 : multi-steps + restart -->
+            <section class="card">
+                <h2>TP 3 : Multi-steps &amp; restart</h2>
+                <p class="desc">
+                    4 steps enchaînés. 1) Coche « échouer au step 3 » et lance : le step 4 ne tourne pas.
+                    2) Relance avec le <strong>même n°</strong> sans cocher : step 1 sauté,
+                    step 2 rejoué (allowStartIfComplete), steps 3 et 4 exécutés.
+                </p>
+                <form th:action="@{/jobs/tp3}" method="post">
+                    <button type="submit">▶ Lancer le TP3</button>
+                    <input type="text" name="runId" value="1" placeholder="n° de lancement"
+                           style="margin-left:.5rem;width:8rem;padding:.5rem .7rem;border-radius:8px;
+                                      border:1px solid var(--border);background:#0b1220;color:var(--text)">
+                    <label style="margin-left:.5rem;font-size:.85rem;color:var(--muted);cursor:pointer">
+                        <input type="checkbox" name="fail" value="true"> échouer au step 3
+                    </label>
+                </form>
+            </section>
+
+            <!-- TP 4 : import CSV par chunk -->
+            <section class="card">
+                <h2>TP 4 : Import CSV par chunk</h2>
+                <p class="desc">
+                    Vide la table Vente, lit <code>ventes.csv</code>, calcule-le TTC (HT × 1,20) et insère
+                    en base par lots de 10 (Reader → Processor → Writer). Observe
+                    <strong>read / write / commit</strong> dans le panneau, et la taille des lots
+                    dans la console serveur.
+                </p>
+                <form th:action="@{/jobs/tp4}" method="post">
+                    <button type="submit">▶ Lancer le TP4 (import ventes)</button>
+                </form>
+            </section>
+
+            <!-- TP 5 : export CSV depuis la base (sens inverse du TP4) -->
+            <section class="card">
+                <h2>TP 5 : Export CSV depuis la base</h2>
+                <p class="desc">
+                    Lit la table <code>VENTE</code> triée par montant HT décroissant et génère
+                    <code>tp5_ventes.csv</code> : ligne d'en-tête, une ligne par vente (plus gros
+                    montant en premier), puis un pied de page <strong>« Total : … »</strong>.
+                    Lance d'abord le TP4 pour remplir la table.
+                </p>
+                <form th:action="@{/jobs/tp5}" method="post">
+                    <button type="submit">▶ Lancer le TP5 (export ventes)</button>
+                </form>
+            </section>
+
+            <!-- TP 6 : passage de parametres (late binding) -->
+            <section class="card">
+                <h2>TP 6 : Paramètres &amp; late binding</h2>
+                <p class="desc">
+                    Les 4 réglages ci-dessous sont envoyés en <strong>JobParameters</strong> et lus
+                    à des endroits différents : le <em>fichier</em> par le <strong>reader</strong>,
+                    le <em>montant mini</em> et <em>HT/TTC</em> par le <strong>processor</strong>
+                    (montant mini = lignes filtrées), le <em>format</em> par le
+                    <strong>writer</strong>. Sortie dans <code>tp6_ventes_sortie.csv</code>
+                    ou <code>tp6_ventes_sortie.json</code>.
+                </p>
+                <form th:action="@{/jobs/tp6}" method="post">
+                    <button type="submit">▶ Lancer le TP6 (rapport paramétré)</button>
+
+                    <select name="fichierSource"
+                            style="margin-left:.5rem;padding:.5rem .7rem;border-radius:8px;
+                                       border:1px solid var(--border);background:#0b1220;color:var(--text)">
+                        <option value="data/ventes.csv">ventes.csv (25 lignes)</option>
+                        <option value="data/tp6_ventes.csv">tp6_ventes.csv (12 lignes)</option>
+                    </select>
+
+                    <select name="format"
+                            style="margin-left:.5rem;padding:.5rem .7rem;border-radius:8px;
+                                       border:1px solid var(--border);background:#0b1220;color:var(--text)">
+                        <option value="CSV">Sortie CSV</option>
+                        <option value="JSON">Sortie JSON</option>
+                    </select>
+
+                    <input type="number" name="montantMini" value="0" min="0" step="10"
+                           title="Ne garder que les ventes dont le montant HT atteint ce seuil"
+                           style="margin-left:.5rem;width:7rem;padding:.5rem .7rem;border-radius:8px;
+                                      border:1px solid var(--border);background:#0b1220;color:var(--text)">
+
+                    <label style="margin-left:.5rem;font-size:.85rem;color:var(--muted);cursor:pointer">
+                        <input type="checkbox" name="totalTtc" value="true"> montants en TTC
+                    </label>
+                </form>
+            </section>
+
+            <!-- TP 7 : tolerance aux fautes (skip / retry) -->
+            <section class="card">
+                <h2>TP 7 : Skip &amp; retry</h2>
+                <p class="desc">
+                    Import CSV → table <code>VENTE</code> (table vidée à chaque clic), mais les
+                    fichiers contiennent des lignes <strong>corrompues</strong> : illisibles
+                    (→ <strong>skip lecture</strong>) ou à montant négatif (→ <strong>skip
+                    traitement</strong>), limite de 6 rejets. Les rejets sont tracés dans
+                    <code>tp7_rejets.csv</code>. La case <em>risque</em> simule une panne
+                    passagère 1 appel sur 10 (→ <strong>retry</strong>). Le <em>runId</em>
+                    identifie l'instance : le laisser vide = nouvelle instance à chaque clic,
+                    ressaisir le même = <strong>restart</strong>.
+                </p>
+                <form th:action="@{/jobs/tp7}" method="post">
+                    <button type="submit">▶ Lancer le TP7 (import tolérant)</button>
+
+                    <select name="fichierSource"
+                            style="margin-left:.5rem;padding:.5rem .7rem;border-radius:8px;
+                                       border:1px solid var(--border);background:#0b1220;color:var(--text)">
+                        <option value="data/tp7_ventes_5lcorrompues.csv">tp7_ventes_5lcorrompues.csv (80 l., 5 corrompues)</option>
+                        <option value="data/tp7_ventes_10lcorrompues.csv">tp7_ventes_10lcorrompues.csv (80 l., 10 corrompues)</option>
+                    </select>
+
+                    <input type="text" name="runId" value="" placeholder="runId (vide = auto)"
+                           title="Meme runId = meme JobInstance : permet le restart apres echec"
+                           style="margin-left:.5rem;width:10rem;padding:.5rem .7rem;border-radius:8px;
+                                      border:1px solid var(--border);background:#0b1220;color:var(--text)">
+
+                    <label style="margin-left:.5rem;font-size:.85rem;color:var(--muted);cursor:pointer">
+                        <input type="checkbox" name="risque" value="true"> risque de panne (1/10)
+                    </label>
+                </form>
+            </section>
+
+            <!-- TP 8 : ExitStatus personnalise (partie 1) -->
+            <section class="card">
+                <h2>TP 8 : ExitStatus personnalisé</h2>
+                <p class="desc">
+                    Saisis un chiffre d'affaires : le step <strong>réussit toujours</strong>
+                    (BatchStatus <code>COMPLETED</code>), mais son <strong>exitCode</strong>
+                    change selon le montant — <code>OBJECTIF_ATTEINT</code> (≥ 1000),
+                    <code>A_SURVEILLER</code> (≥ 500) ou <code>ALERTE</code> (&lt; 500).
+                    Observe la colonne <strong>exit</strong> du panneau. Ces codes serviront
+                    à aiguiller les flows au TP8 partie 2.
+                </p>
+                <form th:action="@{/jobs/tp8}" method="post">
+                    <button type="submit">▶ Lancer le TP8 (bilan CA)</button>
+                    <input type="number" name="caJour" value="1200" min="0" step="50"
+                           title="Chiffre d'affaires du jour (objectif = 1000)"
+                           style="margin-left:.5rem;width:8rem;padding:.5rem .7rem;border-radius:8px;
+                                      border:1px solid var(--border);background:#0b1220;color:var(--text)">
+                </form>
+            </section>
+
+            <!-- TP 9 : conditionnement du flow -->
+            <section class="card">
+                <h2>TP 9 : Conditionnement du flow</h2>
+                <p class="desc">
+                    13 exercices : assemble les <strong>briques</strong> (steps déjà écrits) dans
+                    des <strong>jobs</strong> pour reproduire les schémas de l'énoncé. Règle les
+                    paramètres puis clique le <strong>numéro</strong> de l'exercice. Le chemin
+                    parcouru s'affiche dans le bandeau et le panneau de droite.
+                    <br><code>scenario</code> pilote <code>controleStep</code> ·
+                    <code>montant</code> le decider (ex 9) · <code>échouer</code> fait planter
+                    <code>traitementStep</code> (ex 5, 8).
+                </p>
+                <form th:action="@{/jobs/tp9}" method="post">
+                    <input type="text" name="scenario" placeholder="scenario (PREMIUM, VIDE, A1…)"
+                           style="width:16rem;padding:.5rem .7rem;border-radius:8px;
+                                      border:1px solid var(--border);background:#0b1220;color:var(--text)">
+                    <input type="number" name="montant" value="0" step="100"
+                           title="Exercice 9 : montant > 1000 = GROS"
+                           style="margin-left:.5rem;width:7rem;padding:.5rem .7rem;border-radius:8px;
+                                      border:1px solid var(--border);background:#0b1220;color:var(--text)">
+                    <label style="margin-left:.5rem;font-size:.85rem;color:var(--muted);cursor:pointer">
+                        <input type="checkbox" name="echouer" value="true"> échouer (traitementStep)
+                    </label>
+                    <div style="margin-top:.7rem;display:flex;flex-wrap:wrap;gap:.4rem">
+                        <button type="submit" name="exercice" value="1">1</button>
+                        <button type="submit" name="exercice" value="2">2</button>
+                        <button type="submit" name="exercice" value="3">3</button>
+                        <button type="submit" name="exercice" value="4">4</button>
+                        <button type="submit" name="exercice" value="5">5</button>
+                        <button type="submit" name="exercice" value="6">6</button>
+                        <button type="submit" name="exercice" value="7">7</button>
+                        <button type="submit" name="exercice" value="8">8</button>
+                        <button type="submit" name="exercice" value="9">9</button>
+                        <button type="submit" name="exercice" value="10">10</button>
+                        <button type="submit" name="exercice" value="11">11</button>
+                        <button type="submit" name="exercice" value="12">12</button>
+                        <button type="submit" name="exercice" value="13">13</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>TP 10 : Chunk parallélisé (multi-thread)</h2>
+                <p class="desc">
+                    Import de <strong>500 ventes</strong> avec un processor
+                    <strong>volontairement lent</strong> (simule une tarification externe).
+                    En mono-thread c'est long (<strong>~4,8 s</strong>) ; parallélisé avec un
+                    <code>TaskExecutor</code> ça tombe à <strong>~1,5 s</strong>.
+                    La table VENTE est vidée avant chaque lancement.
+                    Le bandeau montre <code>readCount</code> / <code>writeCount</code> et la durée.
+                </p>
+                <form th:action="@{/jobs/tp10}" method="post">
+                    <button type="submit">Lancer l'import parallélisé</button>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>TP 11 : Partitionnement</h2>
+                <p class="desc">
+                    Import de <strong>500 ventes</strong> réparties en <strong>10 fichiers</strong>
+                    (un par boutique). Un <code>Partitioner</code> crée 10 partitions ; un step
+                    <strong>maître</strong> lance 10 copies du step <strong>esclave</strong> en
+                    parallèle, chacune avec <strong>son propre reader</strong> sur son fichier.
+                    Le bandeau montre le nombre de partitions rejouées, le total en base, les
+                    threads et la durée.
+                    <br>
+                    <strong>Reprise :</strong> coche <em>casser B10</em> et lance avec un
+                    <em>runId</em> → la partition B10 échoue (job FAILED, 9/10 importées).
+                    Relance avec le <strong>même runId</strong> sans cocher : seule B10 rejoue
+                    → COMPLETED, 500 en base. La table n'est vidée qu'au <strong>premier</strong>
+                    lancement d'un runId (pas au restart).
+                </p>
+                <form th:action="@{/jobs/tp11}" method="post">
+                    <button type="submit">Lancer l'import partitionné</button>
+
+                    <input type="text" name="runId" value="" placeholder="runId (vide = auto)"
+                           title="Meme runId = meme JobInstance : permet le restart apres echec"
+                           style="margin-left:.5rem;width:10rem;padding:.5rem .7rem;border-radius:8px;
+                                      border:1px solid var(--border);background:#0b1220;color:var(--text)">
+
+                    <label style="margin-left:.5rem;font-size:.85rem;color:var(--muted);cursor:pointer">
+                        <input type="checkbox" name="casserB10" value="true"> casser B10
+                    </label>
+                </form>
+            </section>
+
+            <!-- TP 12 : tester un batch -->
+            <section class="card">
+                <h2>TP 12 : Tester un batch</h2>
+                <p class="desc">
+                    TP <strong>inversé</strong> : le <code>TP12_JobConfig</code> est fourni,
+                    c'est le <strong>test</strong> qu'on écrit. Le job <strong>fusionne</strong>
+                    <code>ventes_A.csv</code> + <code>ventes_B.csv</code> dans un 3ᵉ fichier
+                    <strong>sans doublon</strong> (8 lignes = 5 + 5 − 2 doublons). Le reader
+                    <strong>valide l'en-tête</strong> : colonnes mal nommées / en désordre ou en
+                    nombre incorrect → refus. À toi d'écrire les 4 tests de
+                    <code>TP12JobTest</code> (reader isolé + job complet).
+                </p>
+                <form th:action="@{/jobs/tp12}" method="post">
+                    <button type="submit">Lancer la fusion des deux CSV</button>
+                </form>
+            </section>
+
+            <!--
+                Pour ajouter un TP :
+                1. Ajoute un @PostMapping("/jobs/monTp") dans WebController
+                2. Duplique une <section class="card"> ci-dessus
+                3. Pointe le formulaire vers th:action="@{/jobs/monTp}"
+            -->
+        </div>
+
+        <!-- Colonne droite : panneau des dernieres executions (tables BATCH_*) -->
+        <aside class="col-right">
+            <section class="card">
+                <div class="panel-head">
+                    <h2>📊 Dernières exécutions</h2>
+                    <a class="refresh" href="/">↻ Rafraîchir</a>
+                </div>
+
+                <p class="empty" th:if="${executions?.isEmpty()}">Aucune exécution pour l'instant : lance un job.</p>
+
+                <div class="exec" th:each="e : ${executions}">
+                    <div class="exec-top">
+                        <span class="job" th:text="${e.jobName}">jobName</span>
+                        <span class="id" th:text="'#' + ${e.id}">#1</span>
+                        <span class="badge ok"  th:if="${e.ok}"     th:text="${e.status}">COMPLETED</span>
+                        <span class="badge ko"  th:if="${e.failed}" th:text="${e.status}">FAILED</span>
+                        <span class="badge run" th:unless="${e.ok or e.failed}" th:text="${e.status}">STARTED</span>
+                    </div>
+                    <div class="exec-meta">
+                        <span th:text="${e.start}">00:00:00</span> ·
+                        durée <span th:text="${e.duration}"> ms</span> ·
+                        exit <span th:text="${e.exitCode}">COMPLETED</span>
+                    </div>
+                    <div class="exec-params" th:if="${!e.params.isEmpty()}" th:text="${e.params}">params</div>
+
+                    <table class="steps" th:if="${!e.steps.isEmpty()}">
+                        <tr><th>step</th><th>statut</th><th>read</th><th>write</th><th>skip</th><th>commit</th><th>rollback</th></tr>
+                        <tr th:each="s : ${e.steps}">
+                            <td th:text="${s.name}">step</td>
+                            <td th:text="${s.status}">COMPLETED</td>
+                            <td th:text="${s.read}">0</td>
+                            <td th:text="${s.write}">0</td>
+                            <td th:text="${s.skip}">0</td>
+                            <td th:text="${s.commit}">0</td>
+                            <td th:text="${s.rollback}">0</td>
+                        </tr>
+                    </table>
+
+                    <div class="exit-msg" th:if="${e.failed and !e.exitMessage.isEmpty()}" th:text="${e.exitMessage}">stacktrace</div>
+                </div>
+            </section>
+        </aside>
+    </div>
+</main>
+
+<script>
+    // Filtre d'affichage des TP : /?start=8 n'affiche que les cartes dont le n° de TP est >= 8.
+    // Le controleur redirige vers "/" apres chaque job (ce qui perdrait le parametre), donc on
+    // memorise la valeur dans localStorage pour que le filtre survive au redirect.
+    (function () {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('start')) {
+            const v = parseInt(params.get('start'), 10);
+            if (v > 1) localStorage.setItem('tpStart', String(v)); else localStorage.removeItem('tpStart');
+        }
+        const start = parseInt(params.get('start') ?? localStorage.getItem('tpStart') ?? '1', 10) || 1;
+        if (start <= 1) return;
+
+        document.querySelectorAll('section.card').forEach(card => {
+            const h2 = card.querySelector('h2');
+            const m = h2 && h2.textContent.match(/TP\s*(\d+)/i);
+            if (m && parseInt(m[1], 10) < start) card.style.display = 'none';
+        });
+
+        const bar = document.createElement('div');
+        bar.className = 'flash';
+        bar.style.background = 'rgba(99,102,241,.15)';
+        bar.style.borderColor = 'rgba(99,102,241,.4)';
+        bar.style.color = 'inherit';
+        bar.innerHTML = 'Filtre : seuls les TP ≥ ' + start +
+            ' sont affichés — <a href="?start=1" style="color:inherit;text-decoration:underline">tout afficher</a>';
+        const host = document.querySelector('.col-left') || document.querySelector('main');
+        host.insertBefore(bar, host.firstChild);
+    })();
+</script>
+</body>
+</html>

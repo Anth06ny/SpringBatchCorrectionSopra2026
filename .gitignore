@@ -1,0 +1,56 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Kotlin ###
+.kotlin
+
+### H2 (base de metadonnees Batch, artefacts d execution) ###
+testdb.*.db
+*.mv.db
+*.trace.db
+*.lock.db
+
+### SORTIES generees par les jobs (TP5/TP6/TP7) : tout va dans data/out/.          ###
+### Les ENTREES (ventes.csv, tp6_ventes.csv, tp7_ventes_*.csv) restent dans data/   ###
+### a la racine et VERSIONNEES. On conserve le dossier data/out/ (via .gitkeep) pour ###
+### qu'il existe au clone, mais on ignore son contenu genere.                        ###
+### NB : la regle IntelliJ "out/" plus haut ignore deja tout dossier "out" ; d'ou le ###
+### !data/out/ qui le re-inclut avant d'ignorer son contenu.                         ###
+!data/out/
+data/out/*
+!data/out/.gitkeep
