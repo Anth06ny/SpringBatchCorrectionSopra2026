@@ -17,6 +17,8 @@ public class TP9_JobConfig {
                          Step archivageStep) {
         return new JobBuilder("tp9ex1Job", jobRepository)
                 .start(preparationStep)
+                .next(expeditionStep)
+                .next(archivageStep)
                 .build();
     }
 
@@ -26,7 +28,9 @@ public class TP9_JobConfig {
                          Step expeditionStep,
                          Step preparationStep) {
         return new JobBuilder("tp9ex2Job", jobRepository)
-                .start(controleStep)
+                .start(controleStep).on("PREMIUM").to(expeditionStep)
+                .from(controleStep).on("*").to(preparationStep)
+                .end()
                 .build();
     }
 
@@ -35,7 +39,9 @@ public class TP9_JobConfig {
                          Step controleStep,
                          Step archivageStep) {
         return new JobBuilder("tp9ex3Job", jobRepository)
-                .start(controleStep)
+                .start(controleStep).on("VIDE").end()
+                .from(controleStep).on("*").to(archivageStep)
+                .end()
                 .build();
     }
 
@@ -45,8 +51,13 @@ public class TP9_JobConfig {
                          Step alerteStep,
                          Step archivageStep) {
         return new JobBuilder("tp9ex4Job", jobRepository)
-                .start(controleStep)
+                // @formatter:off
+                .start(controleStep).on("CORROMPU").to(alerteStep)
+                    .from(alerteStep).on("*").fail()
+                .from(controleStep).on("*").to(archivageStep)
+                .end()
                 .build();
+                // @formatter:on
     }
 
     @Bean

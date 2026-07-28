@@ -12,12 +12,18 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.infrastructure.item.ItemProcessor;
 import org.springframework.batch.infrastructure.item.ItemWriter;
+import org.springframework.batch.infrastructure.item.database.JpaItemWriter;
+import org.springframework.batch.infrastructure.item.database.builder.JpaItemWriterBuilder;
 import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
+
+import java.time.LocalDate;
+
+import static org.example.springbatchexercicejava.batch.Constants.TVA;
 
 @Configuration
 public class TP4_JobConfig {
@@ -45,7 +51,13 @@ public class TP4_JobConfig {
      */
     @Bean
     public ItemProcessor<VenteCsvDTO, VenteEntity> venteProcessor() {
-        return csv -> null;
+        return csv -> new VenteEntity(
+                LocalDate.parse(csv.getDate()),
+                csv.getIdBoutique(),
+                csv.getProduit(),
+                csv.getMontantHt(),
+                // calcul metier : TTC = HT x 1.20
+                csv.getMontantHt() * TVA) ;
     }
 
     /**
@@ -54,25 +66,40 @@ public class TP4_JobConfig {
      * log qui rend visible l'effet de la taille de chunk aux stagiaires.
      */
     @Bean
-    public ItemWriter<VenteEntity> venteWriter(EntityManagerFactory entityManagerFactory) {
-        return chunk -> System.out.println("Writer: ecriture d'un lot de " + chunk.size() + " ventes");
+    public JpaItemWriter<VenteEntity> venteWriter(EntityManagerFactory entityManagerFactory) {
+
+        JpaItemWriter<VenteEntity> jpaWriter = new JpaItemWriterBuilder<VenteEntity>()
+                .entityManagerFactory(entityManagerFactory)
+                //Force l'insert sans merge (pas de select pour voir si l'object existe en base)
+                //.usePersist(true)
+                .build();
+        return jpaWriter;
     }
 
     // Step chunk : lit/traite/ecrit par lots de 10, chaque lot = 1 transaction/commit
     @Bean
     public Step tp4Step(JobRepository jobRepository,
                         PlatformTransactionManager transactionManager,
-                        Tasklet helloTask) {
+                        //1 Reader
+                        FlatFileItemReader<VenteCsvDTO> venteReader,
+                        //0 à 1 Processor  (Si on en veut plusieurs, on charge celui qui fera la liaison)
+                        ItemProcessor<VenteCsvDTO, VenteEntity> venteProcessor,
+                        //1 Writer (Si plusieurs on charge celui qui fera la liaison)
+                        ItemWriter<VenteEntity> venteWriter
+                        ) {
         return new StepBuilder("tp4Step", jobRepository)
-                .tasklet(helloTask, transactionManager)
+                .<VenteCsvDTO, VenteEntity>chunk(10)
+                .reader(venteReader)
+                .processor(venteProcessor)
+                .writer(venteWriter)
+                .transactionManager(transactionManager)
                 .build();
     }
 
     @Bean
-    public Job tp4Job(JobRepository jobRepository) {
+    public Job tp4Job(JobRepository jobRepository, Step tp4Step) {
         return new JobBuilder("tp4Job", jobRepository)
-                .start((Step) stepExecution -> {
-                })
+                .start(tp4Step)
                 .build();
     }
 }

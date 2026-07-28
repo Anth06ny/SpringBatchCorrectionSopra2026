@@ -1,8 +1,11 @@
 package org.example.springbatchexercicejava.batch.config;
 
 import org.example.springbatchexercicejava.batch.Constants;
+import org.example.springbatchexercicejava.batch.model.VenteEntity;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.job.parameters.DefaultJobParametersValidator;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
@@ -11,12 +14,17 @@ import org.springframework.batch.infrastructure.item.ItemStreamReader;
 import org.springframework.batch.infrastructure.item.ItemStreamWriter;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemWriterBuilder;
+import org.springframework.batch.infrastructure.item.json.JacksonJsonObjectMarshaller;
+import org.springframework.batch.infrastructure.item.json.builder.JsonFileItemWriterBuilder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.Locale;
+
+import static org.example.springbatchexercicejava.batch.Constants.TVA;
 
 @Configuration
 public class TP6_JobConfig {
@@ -26,11 +34,14 @@ public class TP6_JobConfig {
     /* ------------------------------------------------------------------ */
 
     @Bean
-    public ItemStreamReader<TP6VenteDTO> tp6Reader() {
+    @StepScope
+    public ItemStreamReader<TP6VenteDTO> tp6Reader(
+            @Value("#{jobParameters['fichierSource']}") String fichierSource
+    ) {
         return new FlatFileItemReaderBuilder<TP6VenteDTO>()
                 .name("tp6Reader")
                 // La ressource n'est plus figee : elle vient du menu deroulant de l'IHM.
-                .resource(new FileSystemResource(Constants.TP6_VENTES_CSV))
+                .resource(new FileSystemResource(fichierSource))
                 .linesToSkip(1) // ligne d'en-tete
                 .delimited()
                 .delimiter(";")
@@ -41,27 +52,55 @@ public class TP6_JobConfig {
     }
 
     @Bean
-    public ItemProcessor<TP6VenteDTO, TP6VenteDTO> tp6Processor() {
-        return new ItemProcessor<TP6VenteDTO, TP6VenteDTO>() {
-            @Override
-            public TP6VenteDTO process(TP6VenteDTO item) {
-                //TODO
-                return item;
+    @StepScope
+    public ItemProcessor<TP6VenteDTO, TP6VenteDTO> tp6Processor(
+            @Value("#{jobParameters['montantMini']}") Double montantMini,
+            @Value("#{jobParameters['totalTtc']}") boolean totalTtc
+    ) {
+        return item -> {
+            if(item.montant < montantMini)
+                return null;
+
+            if(totalTtc) {
+                item.montant *= TVA;
             }
+
+            return item;
         };
     }
 
     @Bean
-    public ItemStreamWriter<TP6VenteDTO> tp6Writer() {
-        FileSystemResource sortie = new FileSystemResource(cheminRapportTp6("csv"));
-        return new FlatFileItemWriterBuilder<TP6VenteDTO>()
-                .name("tp6WriterCsv")
-                .resource(sortie)
-                .lineAggregator(v ->
-                        v.getDate() + ";" + v.getIdBoutique() + ";" + v.getProduit()
-                                + ";" + formatMontant(v.getMontant()))
-                .headerCallback(writer -> writer.write("date;idBoutique;produit;montantHT"))
-                .build();
+    @StepScope
+    public ItemStreamWriter<TP6VenteDTO> tp6Writer(
+            @Value("#{jobParameters['format']}") String format ,
+            @Value("#{jobParameters['totalTtc']}") boolean totalTtc
+
+    ) throws Exception {
+        FileSystemResource sortie = new FileSystemResource(cheminRapportTp6(format));
+
+
+        //CSV
+        if(format.equalsIgnoreCase("CSV")) {
+            return new FlatFileItemWriterBuilder<TP6VenteDTO>()
+                    .name("tp6WriterCsv")
+                    .resource(sortie)
+                    .lineAggregator(v ->
+                            v.getDate() + ";" + v.getIdBoutique() + ";" + v.getProduit()
+                                    + ";" + formatMontant(v.getMontant()))
+                    .headerCallback(writer -> writer.write("date;idBoutique;produit;" + (totalTtc ? "montantTTC" : "montantHT")))
+                    .build();
+        }
+        //JSON
+        else if(format.equalsIgnoreCase("JSON")){
+            return new JsonFileItemWriterBuilder<TP6VenteDTO>()
+                    .name("tp6WriterJson")
+                    .resource(sortie)
+                    .jsonObjectMarshaller(new JacksonJsonObjectMarshaller<>())
+                    .build();
+        }
+        else {
+            throw new Exception("Format non traité : " + format);
+        }
     }
 
     /* ------------------------------------------------------------------ */
@@ -87,6 +126,10 @@ public class TP6_JobConfig {
     public Job tp6Job(JobRepository jobRepository, Step tp6Step) {
         return new JobBuilder("tp6Job", jobRepository)
                 .start(tp6Step)
+                .validator(new DefaultJobParametersValidator(
+                        new String[]{"fichierSource", "format", "montantMini", "totalTtc"}, // requis
+                        new String[]{"timestamp"}                        // optionnels
+                ))
                 .build();
     }
 

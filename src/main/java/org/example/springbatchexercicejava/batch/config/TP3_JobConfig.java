@@ -30,9 +30,42 @@ public class TP3_JobConfig {
     }
 
     @Bean
-    public Job tp3Job(JobRepository jobRepository, Step tp3Step1) {
+    public Step tp3Step2(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+        return new StepBuilder("tp3Step2", jobRepository)
+                .tasklet(logTasklet("TP3 - Step 2"), transactionManager)
+                .allowStartIfComplete(true)
+                .build();
+    }
+
+    @Bean
+    public Step tp3Step3(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+
+        Tasklet tasklet =  (contribution, chunkContext) -> {
+            String message = chunkContext.getStepContext().getJobParameters().getOrDefault("fail", "false").toString();
+            if(message.equalsIgnoreCase("true")) throw new Exception("fail");
+            return RepeatStatus.FINISHED;
+        };
+
+        return new StepBuilder("tp3Step3", jobRepository)
+                .tasklet(tasklet, transactionManager)
+                .allowStartIfComplete(true)
+                .build();
+    }
+
+    @Bean
+    public Step tp3Step4(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+        return new StepBuilder("tp3Step4", jobRepository)
+                .tasklet(logTasklet("TP3 - Step 4"), transactionManager)
+                .build();
+    }
+
+    @Bean
+    public Job tp3Job(JobRepository jobRepository, Step tp3Step1, Step tp3Step2, Step tp3Step3, Step tp3Step4) {
         return new JobBuilder("tp3Job", jobRepository)
                 .start(tp3Step1)
+                .next(tp3Step2)
+                .next(tp3Step3)
+                .next(tp3Step4)
                 .build();
     }
 }

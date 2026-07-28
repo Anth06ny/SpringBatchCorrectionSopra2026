@@ -3,6 +3,8 @@ package org.example.springbatchexercicejava.batch.config;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.QueryTimeoutException;
 import org.example.springbatchexercicejava.batch.Constants;
+import org.example.springbatchexercicejava.batch.MyRejetsListener;
+import org.example.springbatchexercicejava.batch.VenteInvalideException;
 import org.example.springbatchexercicejava.batch.model.VenteEntity;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
@@ -15,11 +17,13 @@ import org.springframework.batch.infrastructure.item.ItemStreamReader;
 import org.springframework.batch.infrastructure.item.ItemWriter;
 import org.springframework.batch.infrastructure.item.database.JpaItemWriter;
 import org.springframework.batch.infrastructure.item.database.builder.JpaItemWriterBuilder;
+import org.springframework.batch.infrastructure.item.file.FlatFileParseException;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
@@ -60,6 +64,10 @@ public class TP7_JobConfig {
                 }
             }
 
+            if(csv.getMontantHt() < 0)  {
+                throw new VenteInvalideException("Montant invalide : " + csv.getMontantHt())   ;
+            }
+
             return new VenteEntity(
                     LocalDate.parse(csv.getDate()),
                     csv.getIdBoutique(),
@@ -97,13 +105,26 @@ public class TP7_JobConfig {
                         ItemStreamReader<TP7VenteDTO> tp7Reader,
                         ItemProcessor<TP7VenteDTO, VenteEntity> tp7Processor,
                         ItemWriter<VenteEntity> tp7Writer) {
+
+        var rejectListener =  new MyRejetsListener();
+
         return new StepBuilder("tp7Step", jobRepository)
                 .<TP7VenteDTO, VenteEntity>chunk(Constants.CHUNK_SIZE)
                 .reader(tp7Reader)
                 .processor(tp7Processor)
                 .writer(tp7Writer)
                 .faultTolerant()
+                // ligne CSV mal formee -> on l'ignore
+                .skip(FlatFileParseException.class)
+                // montant illisible -> on l'ignore aussi
+                .skip(NumberFormatException.class)
+                .skip(VenteInvalideException.class)
+                .skipLimit(6)
                 .transactionManager(transactionManager)
+                .skipListener(rejectListener)
+                .listener(rejectListener)
+                .retry(QueryTimeoutException.class)
+                .retryLimit(3)
                 .build();
     }
 
@@ -120,6 +141,16 @@ public class TP7_JobConfig {
         private String idBoutique = "";
         private String produit = "";
         private double montantHt = 0.0;
+
+        @Override
+        public String toString() {
+            return "TP7VenteDTO{" +
+                    "date='" + date + '\'' +
+                    ", idBoutique='" + idBoutique + '\'' +
+                    ", produit='" + produit + '\'' +
+                    ", montantHt=" + montantHt +
+                    '}';
+        }
 
         public String getDate() {
             return date;

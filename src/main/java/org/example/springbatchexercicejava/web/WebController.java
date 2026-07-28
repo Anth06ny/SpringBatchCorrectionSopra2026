@@ -10,8 +10,12 @@ import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.job.JobExecutionException;
+import org.springframework.batch.core.job.parameters.InvalidJobParametersException;
 import org.springframework.batch.core.job.parameters.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobExecutionAlreadyRunningException;
+import org.springframework.batch.core.launch.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.launch.JobOperator;
+import org.springframework.batch.core.launch.JobRestartException;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.StepExecution;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -24,7 +28,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -41,8 +44,8 @@ public class WebController {
     private final JobOperator jobOperator;
     private final JobRepository jobRepository;
     private final VenteRepository venteRepository;
-    private final Job helloJob;
-    private final Job tp5Job;
+    private final Job helloJob, secondJob;
+    private final Job tp5Job, tp3Job,tp4Job;
     private final Job tp6Job;
     private final Job tp7Job;
     private final Job tp8Job;
@@ -57,7 +60,10 @@ public class WebController {
                          JobRepository jobRepository,
                          VenteRepository venteRepository,
                          @Qualifier("helloJob") Job helloJob,
+                         Job secondJob,
                          @Qualifier("tp5Job") Job tp5Job,
+                         Job tp3Job,
+                         Job tp4Job,
                          @Qualifier("tp6Job") Job tp6Job,
                          @Qualifier("tp7Job") Job tp7Job,
                          @Qualifier("tp8Job") Job tp8Job,
@@ -71,7 +77,10 @@ public class WebController {
         this.jobRepository = jobRepository;
         this.venteRepository = venteRepository;
         this.helloJob = helloJob;
+        this.secondJob = secondJob;
         this.tp5Job = tp5Job;
+        this.tp3Job = tp3Job;
+        this.tp4Job = tp4Job;
         this.tp6Job = tp6Job;
         this.tp7Job = tp7Job;
         this.tp8Job = tp8Job;
@@ -81,6 +90,18 @@ public class WebController {
         this.tp11Tracker = tp11Tracker;
         this.tp12Job = tp12Job;
         this.applicationContext = applicationContext;
+    }
+
+    /**
+     * Le numero place en suffixe d'un libelle "Produit_42" (0 si absent).
+     */
+    private static int numeroDuLibelle(String libelle) {
+        String suffixe = libelle.substring(libelle.lastIndexOf('_') + 1);
+        try {
+            return Integer.parseInt(suffixe);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     @GetMapping("/")
@@ -94,7 +115,7 @@ public class WebController {
         // Parametre unique : sinon Spring Batch refuse de relancer un job deja
         // termine avec les memes parametres.
         var params = new JobParametersBuilder()
-                //.addLong("timestamp", System.currentTimeMillis())
+                .addLong("timestamp", System.currentTimeMillis())
                 .toJobParameters();
 
         JobExecution execution = jobOperator.start(helloJob, params);
@@ -107,48 +128,78 @@ public class WebController {
     }
 
     @PostMapping("/jobs/second")
-    public String tp1_2(RedirectAttributes redirect) {
+    public String tp1_2(RedirectAttributes redirect) throws JobInstanceAlreadyCompleteException, InvalidJobParametersException, JobExecutionAlreadyRunningException, JobRestartException {
+
+        // Parametre unique : sinon Spring Batch refuse de relancer un job deja
+        // termine avec les memes parametres.
+        var params = new JobParametersBuilder()
+                .addLong("timestamp", System.currentTimeMillis())
+                .toJobParameters();
+
+        JobExecution execution = jobOperator.start(secondJob, params);
 
         redirect.addFlashAttribute(
-                "errorMessage",
-                "secondJob → TODO)"
+                "message",
+                "secondJob → " + execution.getStatus() + " (exécution #" + execution.getId() + ")"
         );
         return "redirect:/";
     }
 
     @PostMapping("/jobs/tp2")
     public String tp2(@RequestParam(defaultValue = "") String message,
-                      RedirectAttributes redirect) {
+                      RedirectAttributes redirect) throws JobInstanceAlreadyCompleteException, InvalidJobParametersException, JobExecutionAlreadyRunningException, JobRestartException {
 
+        // Parametre unique : sinon Spring Batch refuse de relancer un job deja
+        // termine avec les memes parametres.
+        var params = new JobParametersBuilder()
+                .addLong("timestamp", System.currentTimeMillis())
+                .addString("message", message)
+                .toJobParameters();
+
+        JobExecution execution = jobOperator.start(secondJob, params);
         redirect.addFlashAttribute(
-                "errorMessage",
-                "tp2Job → TODO)"
+                "message",
+                "tp2Job → " + execution.getStatus() + " (exécution #" + execution.getId() + ")"
         );
+
         return "redirect:/";
     }
 
     @PostMapping("/jobs/tp3")
     public String tp3(@RequestParam(defaultValue = "1") String runId,
                       @RequestParam(defaultValue = "false") boolean fail,
-                      RedirectAttributes redirect) {
+                      RedirectAttributes redirect) throws JobInstanceAlreadyCompleteException, InvalidJobParametersException, JobExecutionAlreadyRunningException, JobRestartException {
+
+        var params = new JobParametersBuilder()
+                .addString("runId", runId)
+                .addString("fail", String.valueOf(fail), false)
+                .toJobParameters();
+
+        JobExecution execution = jobOperator.start(tp3Job, params);
 
         redirect.addFlashAttribute(
-                "errorMessage",
-                "tp3Job (runId=" + runId + ") → TODO)"
+                "message",
+                "tp3Job (runId=" + runId + ") → " + execution.getStatus() + " (exécution #" + execution.getId() + ")"
         );
         return "redirect:/";
     }
 
     @PostMapping("/jobs/tp4")
-    public String tp4(RedirectAttributes redirect) {
+    public String tp4(RedirectAttributes redirect) throws JobInstanceAlreadyCompleteException, InvalidJobParametersException, JobExecutionAlreadyRunningException, JobRestartException {
 
         // On vide la table VENTE avant l'import : chaque clic reflete donc le seul
         // contenu du CSV (sinon les lignes s'accumuleraient a chaque relance).
         venteRepository.deleteAll();
 
+        var params = new JobParametersBuilder()
+                .addLong("timestamp", System.currentTimeMillis())
+                .toJobParameters();
+
+        JobExecution execution = jobOperator.start(tp4Job, params);
+
         redirect.addFlashAttribute(
-                "errorMessage",
-                "tp4Job → TODO)"
+                "message",
+                "tp4Job → " + execution.getStatus() + " (exécution #" + execution.getId() + ")"
         );
 
         return "redirect:/";
@@ -185,6 +236,10 @@ public class WebController {
         // JobParameters n'accepte que String / Long / Double / Date & co.
         var params = new JobParametersBuilder()
                 .addLong("timestamp", System.currentTimeMillis())
+                .addString("fichierSource", fichierSource)
+                .addString("format", format)
+                .addDouble("montantMini", montantMini)
+                .addString("totalTtc", String.valueOf(totalTtc))
                 .toJobParameters();
 
         JobExecution execution = jobOperator.start(tp6Job, params);
@@ -241,7 +296,9 @@ public class WebController {
         if (execution.getStatus() == BatchStatus.COMPLETED) {
             redirect.addFlashAttribute("message", texte);
         } else {
-            redirect.addFlashAttribute("errorMessage", texte);
+            var cause = execution.getAllFailureExceptions().get(0).getCause().getCause();
+
+            redirect.addFlashAttribute("errorMessage", texte + "\n" + cause.getMessage());
         }
         return "redirect:/";
     }
@@ -263,8 +320,9 @@ public class WebController {
                 "message",
                 """
                         tp8Job → statut=%s
+                        exitsSatus -> %s
                         (CA=%s €, objectif=%s €)"
-                        """.formatted(execution.getStatus(), caJour, Constants.OBJECTIF_CA)
+                        """.formatted(execution.getStatus(), execution.getExitStatus(), caJour, Constants.OBJECTIF_CA)
         );
         return "redirect:/";
     }
@@ -410,6 +468,10 @@ public class WebController {
         return "redirect:/";
     }
 
+    /* -------------------------------- */
+    // Pour l'UI
+    /* -------------------------------- */
+
     @PostMapping("/jobs/tp12")
     public String tp12(RedirectAttributes redirect) throws Exception {
 
@@ -436,10 +498,6 @@ public class WebController {
         return "redirect:/";
     }
 
-    /* -------------------------------- */
-    // Pour l'UI
-    /* -------------------------------- */
-
     @ExceptionHandler(Exception.class)
     public String onJobError(Exception e, RedirectAttributes redirect) {
         e.printStackTrace();
@@ -451,7 +509,9 @@ public class WebController {
         return "redirect:/";
     }
 
-    /** Le step de l'execution portant ce nom (les compteurs affiches par l'IHM). */
+    /**
+     * Le step de l'execution portant ce nom (les compteurs affiches par l'IHM).
+     */
     private StepExecution step(JobExecution execution, String nom) {
         return execution.getStepExecutions().stream()
                 .filter(s -> s.getStepName().equals(nom))
@@ -459,17 +519,9 @@ public class WebController {
                 .orElseThrow(() -> new IllegalStateException("Aucun step nomme " + nom));
     }
 
-    /** Le numero place en suffixe d'un libelle "Produit_42" (0 si absent). */
-    private static int numeroDuLibelle(String libelle) {
-        String suffixe = libelle.substring(libelle.lastIndexOf('_') + 1);
-        try {
-            return Integer.parseInt(suffixe);
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    /** Les dernieres executions, tous jobs confondus, de la plus recente a la plus ancienne. */
+    /**
+     * Les dernieres executions, tous jobs confondus, de la plus recente a la plus ancienne.
+     */
     private List<ExecView> recentExecutions(int limit) {
         return jobRepository.getJobNames().stream()
                 .flatMap(name -> jobRepository.getJobInstances(name, 0, 50).stream())

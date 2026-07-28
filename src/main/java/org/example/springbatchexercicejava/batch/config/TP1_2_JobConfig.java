@@ -48,4 +48,33 @@ public class TP1_2_JobConfig {
     // 2eme tache
     /* -------------------------------- */
 
+    // Le Job : un enchainement d'etapes (ici une seule)
+    @Bean
+    public Job secondJob(JobRepository jobRepository, Step secondStep) {
+        return new JobBuilder("secondJob", jobRepository)
+                .start(secondStep)
+                .build();
+    }
+
+    // Une etape de type Tasklet
+    @Bean
+    public Step secondStep(JobRepository jobRepository, PlatformTransactionManager transactionManager) {
+
+        Tasklet tasklet = (contribution, chunkContext) -> {
+
+            String message = chunkContext.getStepContext().getJobParameters().getOrDefault("message", "-").toString();
+
+            if(message.equalsIgnoreCase("error")) {
+                throw new Exception("C'est une erreur");
+            }
+
+            System.out.println("C'est la 2ᵉ tâche ! : " + message);
+            return RepeatStatus.FINISHED;
+        };
+
+        return new StepBuilder("secondStep", jobRepository)
+                .tasklet(tasklet, transactionManager)
+                .build();
+    }
+
 }
