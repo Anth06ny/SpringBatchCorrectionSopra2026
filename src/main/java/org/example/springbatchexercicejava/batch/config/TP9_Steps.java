@@ -17,7 +17,17 @@ public class TP9_Steps {
 
     Step logStep(String nom, JobRepository jobRepository, PlatformTransactionManager tm) {
         Tasklet task = (contribution, chunkContext) -> {
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
             System.out.println("🧩 " + nom);
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
             return RepeatStatus.FINISHED;
         };
         return new StepBuilder(nom, jobRepository)
