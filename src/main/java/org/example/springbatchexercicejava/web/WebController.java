@@ -4,6 +4,7 @@ import org.example.springbatchexercicejava.batch.Constants;
 import org.example.springbatchexercicejava.batch.config.TP10_JobConfig;
 import org.example.springbatchexercicejava.batch.config.TP11_JobConfig;
 import org.example.springbatchexercicejava.batch.config.TP6_JobConfig;
+import org.example.springbatchexercicejava.batch.config.TPFinal_JobConfig;
 import org.example.springbatchexercicejava.batch.model.VenteEntity;
 import org.example.springbatchexercicejava.batch.repository.VenteRepository;
 import org.springframework.batch.core.BatchStatus;
@@ -54,6 +55,7 @@ public class WebController {
     private final Job tp11Job;
     private final TP11_JobConfig.Tp11Tracker tp11Tracker;
     private final Job tp12Job;
+    private final Job tpFinalJob;
     private final ApplicationContext applicationContext;
 
     public WebController(JobOperator jobOperator,
@@ -72,6 +74,7 @@ public class WebController {
                          @Qualifier("tp11Job") Job tp11Job,
                          TP11_JobConfig.Tp11Tracker tp11Tracker,
                          @Qualifier("tp12Job") Job tp12Job,
+                         @Qualifier("tpFinalJob") Job tpFinalJob,
                          ApplicationContext applicationContext) {
         this.jobOperator = jobOperator;
         this.jobRepository = jobRepository;
@@ -89,6 +92,7 @@ public class WebController {
         this.tp11Job = tp11Job;
         this.tp11Tracker = tp11Tracker;
         this.tp12Job = tp12Job;
+        this.tpFinalJob = tpFinalJob;
         this.applicationContext = applicationContext;
     }
 
@@ -492,6 +496,44 @@ public class WebController {
                 + " (exécution #" + execution.getId() + ") — " + bilan;
         if (execution.getStatus() == BatchStatus.COMPLETED) {
             redirect.addFlashAttribute("message", texte);
+        } else {
+            redirect.addFlashAttribute("errorMessage", texte);
+        }
+        return "redirect:/";
+    }
+
+    @PostMapping("/jobs/tpfinal")
+    public String tpFinal(@RequestParam(defaultValue = Constants.TPFINAL_COMMANDES_CSV) String fichierSource,
+                          RedirectAttributes redirect) throws Exception {
+
+        var params = new JobParametersBuilder()
+                .addLong("timestamp", System.currentTimeMillis())
+                .addString("fichierSource", fichierSource, false)
+                .toJobParameters();
+
+        JobExecution execution = jobOperator.start(tpFinalJob, params);
+
+        // Le chemin reellement emprunte : c'est lui qui montre ou le flow s'est arrete.
+        String chemin = execution.getStepExecutions().stream()
+                .sorted(Comparator.comparing(StepExecution::getId))
+                .map(StepExecution::getStepName)
+                .collect(Collectors.joining(" → "));
+
+        // importStep n'existe pas si un des deux controles a echoue avant.
+        String bilan = execution.getStepExecutions().stream()
+                .filter(s -> s.getStepName().equals("importStep"))
+                .findFirst()
+                .map(s -> s.getWriteCount() + " commande(s) importée(s), "
+                        + s.getSkipCount() + " rejetée(s) → " + TPFinal_JobConfig.fichierRejets())
+                .orElse("import non atteint");
+
+        String texte = "tpFinalJob → " + execution.getStatus() + " (exécution #" + execution.getId()
+                + ") — " + bilan + "\nchemin : " + chemin;
+
+        if (execution.getStatus() == BatchStatus.COMPLETED) {
+            redirect.addFlashAttribute("message", texte + "\nsorties : "
+                    + Constants.TPFINAL_CAMIONS_TXT + ", " + Constants.TPFINAL_CHAUFFEURS_DIR
+                    + "/*.txt, " + TPFinal_JobConfig.fichierArchive());
         } else {
             redirect.addFlashAttribute("errorMessage", texte);
         }

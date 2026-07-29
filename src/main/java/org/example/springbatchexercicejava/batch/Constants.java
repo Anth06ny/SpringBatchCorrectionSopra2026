@@ -55,4 +55,18 @@ public final class Constants {
     public static final String TP12_VENTES_A = "data/tp12/ventes_A.csv";
     public static final String TP12_VENTES_B = "data/tp12/ventes_B.csv";
     public static final String TP12_FUSION_OUTPUT = "data/out/tp12_fusion.csv";
+
+    /** Le fichier du soir : 500 commandes, toutes valides. */
+    public static final String TPFINAL_COMMANDES_CSV = "data/tpfinal/commandes.csv";
+
+
+    /** Racine des sorties. L'archive et les rejets vont dans un sous-dossier /dateDuJour. */
+    public static final String TPFINAL_OUT = "data/out";
+
+    /** Chargement des camions : une ligne "Ville : total" par ville. */
+    public static final String TPFINAL_CAMIONS_TXT = "data/out/entrepot/camions.txt";
+
+    /** Tournees des chauffeurs : un fichier <Ville>.txt par ville. */
+    public static final String TPFINAL_CHAUFFEURS_DIR = "data/out/chauffeurs";
+
 }
