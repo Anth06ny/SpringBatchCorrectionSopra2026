@@ -243,7 +243,7 @@ public class TP9_JobConfig {
                 .next(notificationStep)
                 .build();
 
-        return new JobBuilder("tp9ex13Job", jobRepository)
+        return new JobBuilder("tp9ex12Job", jobRepository)
                 .start(mainFlow)
                 .end()
                 .build();
