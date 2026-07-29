@@ -6,9 +6,11 @@ import org.example.springbatchexercicejava.batch.model.VenteEntity;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.partition.Partitioner;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.infrastructure.item.ExecutionContext;
 import org.springframework.batch.infrastructure.item.ItemProcessor;
 import org.springframework.batch.infrastructure.item.ItemStreamReader;
 import org.springframework.batch.infrastructure.item.ItemWriter;
@@ -18,9 +20,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,10 +34,13 @@ public class TP11_JobConfig {
 
     @Bean
     @StepScope
-    public ItemStreamReader<TP11VenteDTO> tp11Reader() {
+    public ItemStreamReader<TP11VenteDTO> tp11Reader(
+            @Value("#{stepExecutionContext['filePath']}") String filePath
+    ) {
+        System.out.println("path : " + filePath);
         return new FlatFileItemReaderBuilder<TP11VenteDTO>()
                 .name("tp11Reader")
-                .resource(new FileSystemResource("data/tp11/ventes_B01.csv"))
+                .resource(new FileSystemResource(filePath))
                 .linesToSkip(1) // ligne d'en-tete
                 .delimited()
                 .delimiter(";")
@@ -88,17 +96,61 @@ public class TP11_JobConfig {
     }
 
     @Bean
-    public Job tp11Job(JobRepository jobRepository, Step tp11WorkerStep) {
-        return new JobBuilder("tp11Job", jobRepository)
-                .start(tp11WorkerStep)
+    public Step tp11MasterStep(
+            JobRepository jobRepository,
+            Step tp11WorkerStep
+    ) {
+        SimpleAsyncTaskExecutor executor = new SimpleAsyncTaskExecutor("part-");
+        executor.setConcurrencyLimit(4);
+
+        return new StepBuilder("tp11MasterStep", jobRepository)
+                .partitioner("tp11MasterStep", new MyPartitioner())
+                .step(tp11WorkerStep)
+                .gridSize(10)
+                .taskExecutor(executor)
                 .build();
+    }
+
+    @Bean
+    public Job tp11Job(JobRepository jobRepository, Step tp11MasterStep) {
+        return new JobBuilder("tp11Job", jobRepository)
+                .start(tp11MasterStep)
+                .build();
+    }
+
+    // Le partitionneur
+    public static class MyPartitioner implements Partitioner {
+
+        // gridSize : Pas obligatoire, si on veut rendre le nombre de partition paramètrable
+        @Override
+        public Map<String, ExecutionContext> partition(int gridSize) {
+            System.out.println("partition gridSize : " + gridSize);
+
+            Map<String, ExecutionContext> partitions = new HashMap<>();
+
+            for (int i = 1; i <= gridSize; i++) {
+                ExecutionContext context = new ExecutionContext();
+                // On peut passer des paramètres
+                if (i >= 10) {
+                    context.putString("filePath", "data/tp11/ventes_B" + i + ".csv");
+                } else {
+                    context.putString("filePath", "data/tp11/ventes_B0" + i + ".csv");
+                }
+
+                partitions.put("partition_" + i, context);
+            }
+
+            return partitions;
+        }
     }
 
     /* ------------------------------------------------------------------ */
     /* Infra fournie (DTO + tracker)                                       */
     /* ------------------------------------------------------------------ */
 
-    /** DTO du CSV, propre au TP11. */
+    /**
+     * DTO du CSV, propre au TP11.
+     */
     public static class TP11VenteDTO {
         private String date = "";
         private String idBoutique = "";
@@ -138,7 +190,9 @@ public class TP11_JobConfig {
         }
     }
 
-    /** Collecteur thread-safe des threads utilises (preuve du parallelisme, test 3). */
+    /**
+     * Collecteur thread-safe des threads utilises (preuve du parallelisme, test 3).
+     */
     public static class Tp11Tracker {
         private final Set<String> threads = ConcurrentHashMap.newKeySet();
 

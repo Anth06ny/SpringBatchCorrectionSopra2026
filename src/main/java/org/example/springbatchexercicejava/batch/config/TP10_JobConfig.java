@@ -17,15 +17,15 @@ import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemRe
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Configuration
 public class TP10_JobConfig {
@@ -50,12 +50,12 @@ public class TP10_JobConfig {
         // capturee par un lambda doit etre "effectivement finale" : on passe donc par
         // une case de tableau. Ce compteur reste volontairement NON thread-safe :
         // c'est l'objet meme du TP.
-        int[] compteur = {0};
+        AtomicInteger compteur = new AtomicInteger(0);
         return dto -> {
             tp10Tracker.enregistrerThread(Thread.currentThread().getName());
-            int numero = compteur[0] + 1;
+            int numero = compteur.incrementAndGet();
             Thread.sleep(Constants.TP10_SLEEP_MS);
-            compteur[0] = numero;
+
             tp10Tracker.enregistrerNumero(numero);
             return new VenteEntity(
                     LocalDate.parse(dto.getDate()),
@@ -79,14 +79,29 @@ public class TP10_JobConfig {
                          PlatformTransactionManager transactionManager,
                          ItemReader<TP10VenteDTO> tp10Reader,
                          ItemProcessor<TP10VenteDTO, VenteEntity> tp10Processor,
-                         ItemWriter<VenteEntity> tp10Writer) {
+                         ItemWriter<VenteEntity> tp10Writer,
+                         AsyncTaskExecutor tarificationTaskExecutor
+    ) {
         return new StepBuilder("tp10Step", jobRepository)
                 .<TP10VenteDTO, VenteEntity>chunk(Constants.CHUNK_SIZE)
                 .reader(tp10Reader)
                 .processor(tp10Processor)
                 .writer(tp10Writer)
                 .transactionManager(transactionManager)
+                .taskExecutor(tarificationTaskExecutor)
                 .build();
+    }
+
+    @Bean
+    public AsyncTaskExecutor tarificationTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);       // nombre de threads au départ
+        executor.setMaxPoolSize(4);        // nombre max de threads
+        executor.setQueueCapacity(0);      // 0 = pas de file d'attente, on attend qu'un thread se libère
+        executor.setThreadNamePrefix("batch-mt-"); // prefixe pour reperer ces threads dans les logs/thread dumps
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
     }
 
     @Bean
@@ -141,8 +156,8 @@ public class TP10_JobConfig {
 
     /**
      * Collecteur thread-safe pour la demo et les tests :
-     *   - les threads reellement utilises par le processor (preuve du parallelisme) ;
-     *   - tous les numeros de traitement attribues (des doublons = course sur le compteur).
+     * - les threads reellement utilises par le processor (preuve du parallelisme) ;
+     * - tous les numeros de traitement attribues (des doublons = course sur le compteur).
      */
     public static class Tp10Tracker {
         private final Set<String> threads = ConcurrentHashMap.newKeySet();
